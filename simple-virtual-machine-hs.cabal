@@ -15,8 +15,10 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Lib
+  exposed-modules:     SimpleVM.VM
   build-depends:       base >= 4.7 && < 5
+                     , mtl >= 2.2.1
+                     , containers >= 0.5.7.1
   default-language:    Haskell2010
 
 executable simple-virtual-machine-hs-exe

@@ -1,6 +1,6 @@
 module Main where
 
-import Lib
+import SimpleVM.VM
 
 main :: IO ()
 main = someFunc
