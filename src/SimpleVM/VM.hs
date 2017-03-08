@@ -3,7 +3,7 @@
 module SimpleVM.VM
     ( Program
     , Operation(..)
-    , VmState
+    , VmState(..)
     , VmError
     , runSimpleVm
     ) where
