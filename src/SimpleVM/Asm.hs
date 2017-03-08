@@ -36,6 +36,9 @@ op =    try (parseOp0 "IADD"   OpIAdd  )
     <|> try (parseOp0 "ISUB"   OpISub  )
     <|> try (parseOp0 "IMUL"   OpIMul  )
     <|> try (parseOp1 "ICONST" OpIConst)
+    <|> try (parseOp1 "GLOAD"  OpGLoad )
+    <|> try (parseOp1 "GSTORE" OpGStore)
+    <|> try (parseOp1 "ICONST" OpIConst)
     <|> try (parseOp0 "PRINT"  OpPrint )
     <|> try (parseOp0 "POP"    OpPop   )
     <|> try (parseOp0 "HALT"   OpHalt  )
@@ -60,7 +63,9 @@ genOp :: Operation -> [Integer]
 genOp (OpIAdd)     = [1]
 genOp (OpISub)     = [2]
 genOp (OpIMul)     = [3]
-genOp (OpIConst v) = [9, v]
+genOp (OpIConst v) = [9,  v]
+genOp (OpGLoad v)  = [11, v]
+genOp (OpGStore v) = [13, v]
 genOp (OpPrint)    = [14]
 genOp (OpPop)      = [15]
 genOp (OpHalt)     = [18]

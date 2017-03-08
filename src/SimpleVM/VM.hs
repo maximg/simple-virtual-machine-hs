@@ -11,6 +11,7 @@ module SimpleVM.VM
 import Prelude hiding (print)
 import qualified Data.Map as M
 import Control.Monad.State
+import Data.Maybe
 
 type Program = [Integer]    -- FIXME: replace with ByteString
 
@@ -38,6 +39,8 @@ data Operation where
     OpISub   :: Operation -- 2
     OpIMul   :: Operation -- 3
     OpIConst :: Integer -> Operation -- 9
+    OpGLoad  :: Integer -> Operation -- 11
+    OpGStore :: Integer -> Operation -- 13
     OpPrint  :: Operation -- 14
     OpPop    :: Operation -- 15
     OpCall   :: Integer -> Integer -> Operation -- 16
@@ -48,6 +51,8 @@ instance Show Operation where
     show (OpISub)       = "ISUB"
     show (OpIMul)       = "IMUL"
     show (OpIConst v)   = "ICONST " ++ show v
+    show (OpGLoad v)    = "GLOAD  " ++ show v
+    show (OpGStore v)   = "GSTORE " ++ show v
     show (OpPrint)      = "PRINT"
     show (OpPop)        = "POP"
     show (OpCall a1 a2) = "CALL " ++ show a1 ++ show a2
@@ -80,6 +85,8 @@ decode opcode = do
         2  -> return OpISub
         3  -> return OpIMul
         9  -> OpIConst <$> fetchOne
+        11 -> OpGLoad  <$> fetchOne
+        13 -> OpGStore <$> fetchOne
         14 -> return OpPrint
         15 -> return OpPop
         16 -> OpCall <$> fetchOne <*> fetchOne
@@ -99,6 +106,10 @@ pop = do
     modify (\vm -> vm { vmStack = tail (vmStack vm) }) -- FIXME: underflow error
     return v
 
+store :: Integer -> Integer -> VmSt ()
+store v addr = do
+    modify (\vm -> vm { vmGlobals = M.insert addr v $ vmGlobals vm})
+
 execBinOp :: (Integer -> Integer -> Integer) -> VmSt ()
 execBinOp f =  do
     v2 <- pop
@@ -109,7 +120,13 @@ exec :: Operation -> VmSt ()
 exec (OpIAdd) = execBinOp (+)
 exec (OpISub) = execBinOp (-)
 exec (OpIMul) = execBinOp (*)
-exec (OpIConst v)   = push v
+exec (OpIConst v)    = push v
+exec (OpGLoad addr)  = do
+    mem <- gets vmGlobals
+    push $ fromJust $ M.lookup addr mem -- FIXME: failed lookup error
+exec (OpGStore addr) = do
+    v <- pop
+    store v addr
 exec (OpPrint)      = do
     v <- pop
     modify $ print (show v)
