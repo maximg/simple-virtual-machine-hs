@@ -38,6 +38,8 @@ data Operation where
     OpIAdd   :: Operation -- 1
     OpISub   :: Operation -- 2
     OpIMul   :: Operation -- 3
+    OpLt     :: Operation -- 4
+    OpEq     :: Operation -- 5
     OpIConst :: Integer -> Operation -- 9
     OpGLoad  :: Integer -> Operation -- 11
     OpGStore :: Integer -> Operation -- 13
@@ -50,6 +52,8 @@ instance Show Operation where
     show (OpIAdd)       = "IADD"
     show (OpISub)       = "ISUB"
     show (OpIMul)       = "IMUL"
+    show (OpLt)         = "LT"
+    show (OpEq)         = "EQ"
     show (OpIConst v)   = "ICONST " ++ show v
     show (OpGLoad v)    = "GLOAD  " ++ show v
     show (OpGStore v)   = "GSTORE " ++ show v
@@ -84,6 +88,8 @@ decode opcode = do
         1  -> return OpIAdd
         2  -> return OpISub
         3  -> return OpIMul
+        4  -> return OpLt
+        5  -> return OpEq
         9  -> OpIConst <$> fetchOne
         11 -> OpGLoad  <$> fetchOne
         13 -> OpGStore <$> fetchOne
@@ -120,6 +126,8 @@ exec :: Operation -> VmSt ()
 exec (OpIAdd) = execBinOp (+)
 exec (OpISub) = execBinOp (-)
 exec (OpIMul) = execBinOp (*)
+exec (OpLt)   = execBinOp (\x y -> if x < y  then 1 else 0)
+exec (OpEq)   = execBinOp (\x y -> if x == y then 1 else 0)
 exec (OpIConst v)    = push v
 exec (OpGLoad addr)  = do
     mem <- gets vmGlobals
@@ -148,10 +156,3 @@ cpu = do
 
 runSimpleVm :: Program -> VmState
 runSimpleVm code = execState cpu $ makeSimpleVm code
-
-prog = [
-    9, 2,   -- iconst 2
-    9, 3,   -- iconst 3
-    1,      -- iadd
-    14,     -- print
-    18]     -- halt

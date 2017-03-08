@@ -10,3 +10,9 @@ main = putStrLn "Test suite not yet implemented"
 -- store 1, store 2, load 1, load 2
 -- load 1 - should error
 -- upper limit on memory ? if yes, test that too
+
+-- Tests for conditions
+-- 1 < 2 T
+-- 1 > 2 F
+-- 1 == 1 T
+-- 1 == 2 F
