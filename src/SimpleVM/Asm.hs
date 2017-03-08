@@ -8,12 +8,17 @@ module SimpleVM.Asm
 import SimpleVM.VM
 import Text.ParserCombinators.Parsec hiding (spaces)
 
+data Statement where
+    StOperation :: Operation -> Statement
+    StNone      :: Statement
+    deriving (Show)
+
 eol :: Parser String
 eol = try (string "\n\r")
-  <|> try (string "\r\n")
-  <|> string "\n"
-  <|> string "\r"
-  <?> "end of line"
+    <|> try (string "\r\n")
+    <|> string "\n"
+    <|> string "\r"
+    <?> "end of line"
 
 spaces :: Parser ()
 spaces = skipMany (char ' ') >> return ()
@@ -46,20 +51,31 @@ op =    try (parseOp0 "IADD"   OpIAdd  )
     <|> try (parseOp0 "HALT"   OpHalt  )
     <?> "opcode"
 
-statement :: Parser Operation
-statement = space *> spaces *> op <* spaces
+operation :: Parser Operation
+operation = space *> spaces *> op <* spaces
 
-program :: Parser [Operation]
-program =
-    do x <- sepBy statement eol
-       eof
-       return x
+statement :: Parser Statement
+statement =
+        try (StOperation <$> operation)
+    <|> (spaces >> return StNone)
+    <?> "statement"
 
-compile :: String -> Either ParseError [Operation]
+program :: Parser [Statement]
+program = do
+        x <- sepBy statement eol
+        optional eol
+        eof
+        return x
+
+compile :: String -> Either ParseError [Statement]
 compile input = parse program "" input
 
-generate :: [Operation] -> [Integer]
-generate prog = concatMap genOp prog
+generate :: [Statement] -> [Integer]
+generate prog = concatMap genStatement prog
+
+genStatement :: Statement -> [Integer]
+genStatement (StOperation op) = genOp op
+genStatement _ = []
 
 genOp :: Operation -> [Integer]
 genOp (OpIAdd)     = [1]
