@@ -91,6 +91,12 @@ main = hspec $ do
       vmStack (runProg prog) `shouldBe` [55]
 
 
+  describe "label" $ do
+    it "can be used instead of an address" $
+      let prog = [ " BR L1", " HALT", "L1: ICONST 55" ] in
+      vmStack (runProg prog) `shouldBe` [55]
+
+
 
 runProg prog = case compile $ unlines (prog ++ [" HALT"]) of
                 Left err -> error $ show err

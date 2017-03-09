@@ -6,6 +6,7 @@ module SimpleVM.VM
     , VmState(..)
     , VmError
     , runSimpleVm
+    , opSize
     ) where
 
 import Prelude hiding (print)
@@ -67,6 +68,16 @@ instance Show Operation where
     show (OpPop)        = "POP"
     show (OpCall a1 a2) = "CALL   " ++ show a1 ++ show a2
     show (OpHalt)       = "HALT"
+
+opSize :: Operation -> Integer
+opSize (OpBr     _) = 2
+opSize (OpBrt    _) = 2
+opSize (OpBrf    _) = 2
+opSize (OpIConst _) = 2 
+opSize (OpGLoad  _) = 2  
+opSize (OpGStore _) = 2 
+opSize (OpCall _ _) = 3   
+opSize _            = 1
 
 changeIp :: (Integer -> Integer) -> VmState -> VmState
 changeIp f vm = vm { vmIp = f (vmIp vm) }

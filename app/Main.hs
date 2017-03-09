@@ -12,15 +12,19 @@ printVm vm = do
     putStrLn $ unlines $ vmOutput vm
 
 run :: String -> IO ()
-run fileName = do
-    contents <- readFile fileName  
+run contents = do
     case compile contents of
         Left err -> print err
         Right prog -> printVm $ runSimpleVm $ generate prog
+
+runWithFilename :: String -> IO ()
+runWithFilename fileName = do
+    contents <- readFile fileName
+    run contents
 
 main :: IO ()
 main = do
   args <- getArgs
   case args of
     []     -> putStrLn "Please provide a file name."
-    (fn:_) -> run fn
+    (fn:_) -> runWithFilename fn
