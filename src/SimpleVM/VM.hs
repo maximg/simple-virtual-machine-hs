@@ -15,7 +15,7 @@ import Data.Maybe
 
 type Program = [Integer]    -- FIXME: replace with ByteString
 
-data VmState = VmState { vmIp :: Int
+data VmState = VmState { vmIp :: Integer
                        , vmCode :: Program    
                        , vmStack :: [Integer]
                        , vmGlobals :: M.Map Integer Integer
@@ -40,6 +40,9 @@ data Operation where
     OpIMul   :: Operation -- 3
     OpLt     :: Operation -- 4
     OpEq     :: Operation -- 5
+    OpBr     :: Integer -> Operation -- 6
+    OpBrt    :: Integer -> Operation -- 7
+    OpBrf    :: Integer -> Operation -- 8
     OpIConst :: Integer -> Operation -- 9
     OpGLoad  :: Integer -> Operation -- 11
     OpGStore :: Integer -> Operation -- 13
@@ -54,16 +57,19 @@ instance Show Operation where
     show (OpIMul)       = "IMUL"
     show (OpLt)         = "LT"
     show (OpEq)         = "EQ"
+    show (OpBr  addr)   = "BR     " ++ show addr
+    show (OpBrt addr)   = "BRT    " ++ show addr
+    show (OpBrf addr)   = "BRF    " ++ show addr
     show (OpIConst v)   = "ICONST " ++ show v
     show (OpGLoad v)    = "GLOAD  " ++ show v
     show (OpGStore v)   = "GSTORE " ++ show v
     show (OpPrint)      = "PRINT"
     show (OpPop)        = "POP"
-    show (OpCall a1 a2) = "CALL " ++ show a1 ++ show a2
+    show (OpCall a1 a2) = "CALL   " ++ show a1 ++ show a2
     show (OpHalt)       = "HALT"
 
-advanceIp :: VmState -> VmState
-advanceIp vm = vm { vmIp = (vmIp vm) + 1 }
+changeIp :: (Integer -> Integer) -> VmState -> VmState
+changeIp f vm = vm { vmIp = f (vmIp vm) }
 
 halt :: VmState -> VmState
 halt vm = vm { vmStopped = True }
@@ -78,8 +84,8 @@ printTrace s vm = vm { vmTrace = (vmTrace vm) ++ [s] }
 fetchOne :: VmSt Integer
 fetchOne = do
     vm <- get
-    let value = vmCode vm !! vmIp vm    -- FIXME: out of bounds error
-    modify advanceIp
+    let value = vmCode vm !! (fromInteger $ vmIp vm)   -- FIXME: out of bounds error
+    modify $ changeIp (+ 1)
     return value     
 
 decode :: Integer -> VmSt Operation
@@ -90,6 +96,9 @@ decode opcode = do
         3  -> return OpIMul
         4  -> return OpLt
         5  -> return OpEq
+        6  -> OpBr     <$> fetchOne
+        7  -> OpBrt    <$> fetchOne
+        8  -> OpBrf    <$> fetchOne
         9  -> OpIConst <$> fetchOne
         11 -> OpGLoad  <$> fetchOne
         13 -> OpGStore <$> fetchOne
@@ -128,6 +137,9 @@ exec (OpISub) = execBinOp (-)
 exec (OpIMul) = execBinOp (*)
 exec (OpLt)   = execBinOp (\x y -> if x < y  then 1 else 0)
 exec (OpEq)   = execBinOp (\x y -> if x == y then 1 else 0)
+exec (OpBr  addr)    = modify $ changeIp (\_ -> addr)
+exec (OpBrt addr)    = pop >>= \v -> when (v == 1) $ modify $ changeIp (\_ -> addr)
+exec (OpBrf addr)    = pop >>= \v -> when (v == 0) $ modify $ changeIp (\_ -> addr)
 exec (OpIConst v)    = push v
 exec (OpGLoad addr)  = do
     mem <- gets vmGlobals

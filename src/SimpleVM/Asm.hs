@@ -42,6 +42,9 @@ op =    try (parseOp0 "IADD"   OpIAdd  )
     <|> try (parseOp0 "IMUL"   OpIMul  )
     <|> try (parseOp0 "LT"     OpLt    )
     <|> try (parseOp0 "EQ"     OpEq    )
+    <|> try (parseOp1 "BR"     OpBr    )
+    <|> try (parseOp1 "BRT"    OpBrt   )
+    <|> try (parseOp1 "BRF"    OpBrf   )
     <|> try (parseOp1 "ICONST" OpIConst)
     <|> try (parseOp1 "GLOAD"  OpGLoad )
     <|> try (parseOp1 "GSTORE" OpGStore)
@@ -83,6 +86,9 @@ genOp (OpISub)     = [2]
 genOp (OpIMul)     = [3]
 genOp (OpLt)       = [4]
 genOp (OpEq)       = [5]
+genOp (OpBr  addr) = [6,  addr]
+genOp (OpBrt addr) = [7,  addr]
+genOp (OpBrf addr) = [8,  addr]
 genOp (OpIConst v) = [9,  v]
 genOp (OpGLoad v)  = [11, v]
 genOp (OpGStore v) = [13, v]

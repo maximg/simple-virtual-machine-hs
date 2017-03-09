@@ -75,6 +75,22 @@ main = hspec $ do
       vmStack (runProg prog) `shouldBe` [1, 3]
 
 
+  describe "br" $ do
+    it "unconditionally jumps to an address" $
+      let prog = [ " BR 3", " HALT", " ICONST 55" ] in
+      vmStack (runProg prog) `shouldBe` [55]
+
+  describe "brt" $ do
+    it "takes a value from the stack and when it is 1 jumps to an address" $
+      let prog = [ " ICONST 1", " BRT 5", " HALT", " ICONST 55" ] in
+      vmStack (runProg prog) `shouldBe` [55]
+
+  describe "brf" $ do
+    it "takes a value from the stack and when it is 0 jumps to an address" $
+      let prog = [ " ICONST 0", " BRF 5", " HALT", " ICONST 55" ] in
+      vmStack (runProg prog) `shouldBe` [55]
+
+
 
 runProg prog = case compile $ unlines (prog ++ [" HALT"]) of
                 Left err -> error $ show err
