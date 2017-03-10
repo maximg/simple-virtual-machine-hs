@@ -45,11 +45,14 @@ data Operation where
     OpBrt    :: Integer -> Operation -- 7
     OpBrf    :: Integer -> Operation -- 8
     OpIConst :: Integer -> Operation -- 9
+    OpLoad   :: Integer -> Operation -- 10
     OpGLoad  :: Integer -> Operation -- 11
+    OpStore  :: Integer -> Operation -- 12
     OpGStore :: Integer -> Operation -- 13
     OpPrint  :: Operation -- 14
     OpPop    :: Operation -- 15
-    OpCall   :: Integer -> Integer -> Operation -- 16
+    OpCall   :: Integer -> Integer -> Operation -- 16 ; addr nargs
+    OpRet    :: Operation -- 17
     OpHalt   :: Operation -- 18
 
 instance Show Operation where
@@ -62,21 +65,26 @@ instance Show Operation where
     show (OpBrt addr)   = "BRT    " ++ show addr
     show (OpBrf addr)   = "BRF    " ++ show addr
     show (OpIConst v)   = "ICONST " ++ show v
+    show (OpLoad v)     = "LOAD   " ++ show v
     show (OpGLoad v)    = "GLOAD  " ++ show v
+    show (OpStore v)    = "STORE  " ++ show v
     show (OpGStore v)   = "GSTORE " ++ show v
     show (OpPrint)      = "PRINT"
     show (OpPop)        = "POP"
     show (OpCall a1 a2) = "CALL   " ++ show a1 ++ show a2
+    show (OpRet)        = "RET"
     show (OpHalt)       = "HALT"
 
 opSize :: Operation -> Integer
 opSize (OpBr     _) = 2
 opSize (OpBrt    _) = 2
 opSize (OpBrf    _) = 2
-opSize (OpIConst _) = 2 
-opSize (OpGLoad  _) = 2  
-opSize (OpGStore _) = 2 
-opSize (OpCall _ _) = 3   
+opSize (OpIConst _) = 2
+opSize (OpLoad   _) = 2
+opSize (OpGLoad  _) = 2
+opSize (OpStore  _) = 2
+opSize (OpGStore _) = 2
+opSize (OpCall _ _) = 3
 opSize _            = 1
 
 changeIp :: (Integer -> Integer) -> VmState -> VmState
@@ -111,12 +119,16 @@ decode opcode = do
         7  -> OpBrt    <$> fetchOne
         8  -> OpBrf    <$> fetchOne
         9  -> OpIConst <$> fetchOne
+        10 -> OpLoad   <$> fetchOne
         11 -> OpGLoad  <$> fetchOne
+        12 -> OpStore  <$> fetchOne
         13 -> OpGStore <$> fetchOne
         14 -> return OpPrint
         15 -> return OpPop
         16 -> OpCall <$> fetchOne <*> fetchOne
+        17 -> return OpRet
         18 -> return OpHalt
+        _  -> error $ "Unsupported opcode " ++ show opcode
 
 
 trace :: Operation -> VmSt ()
@@ -152,25 +164,32 @@ exec (OpBr  addr)    = modify $ changeIp (\_ -> addr)
 exec (OpBrt addr)    = pop >>= \v -> when (v == 1) $ modify $ changeIp (\_ -> addr)
 exec (OpBrf addr)    = pop >>= \v -> when (v == 0) $ modify $ changeIp (\_ -> addr)
 exec (OpIConst v)    = push v
+exec (OpLoad idx)    = undefined
 exec (OpGLoad addr)  = do
     mem <- gets vmGlobals
     push $ fromJust $ M.lookup addr mem -- FIXME: failed lookup error
+exec (OpStore idx)   = undefined
 exec (OpGStore addr) = do
     v <- pop
     store v addr
 exec (OpPrint)      = do
     v <- pop
     modify $ print (show v)
-exec (OpCall a1 a2) = undefined
+exec (OpCall addr nargs) = do
+    gets vmIp >>= push
+    modify $ changeIp (\_ -> addr)
 exec (OpPop)        = do
     pop
     return ()
+exec (OpRet)        = do
+    ip <- pop
+    modify $ changeIp (\_ -> ip)
 exec (OpHalt)       = modify halt
+-- exec op = error $ "Unsupported op " ++ show op
 
 cpu :: VmSt ()
 cpu = do
-    opcode <- fetchOne
-    op <- decode opcode
+    op <- fetchOne >>= decode
     trace op
     exec op
     vm <- get

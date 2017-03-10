@@ -97,6 +97,17 @@ main = hspec $ do
       vmStack (runProg prog) `shouldBe` [55]
 
 
+  describe "call" $ do
+    it "store current ip on stack and jump to an address" $
+      let prog = [ " CALL L1 0", " HALT", "L1: ICONST 55" ] in
+      vmStack (runProg prog) `shouldBe` [55, 3]
+
+  describe "ret" $ do
+    it "takes a value from the stack and continues from that address" $
+      let prog = [ " ICONST 4", " RET", " HALT", " ICONST 55" ] in
+      vmStack (runProg prog) `shouldBe` [55]
+
+
 
 runProg prog = case compile $ unlines (prog ++ [" HALT"]) of
                 Left err -> error $ show err

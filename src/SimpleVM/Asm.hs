@@ -9,32 +9,36 @@ module SimpleVM.Asm
 import SimpleVM.VM
 import Data.Maybe
 import qualified Data.Map as M
-import Text.ParserCombinators.Parsec hiding (spaces)
+import Text.ParserCombinators.Parsec hiding (spaces, label)
 
-data JumpTarget where
-    JTAddr :: Integer -> JumpTarget
-    JTLabel :: String -> JumpTarget
+type Address = Integer
+type Label = String
+type Symbols = M.Map Label Address
+
+data Loc where
+    LAddr  :: Address -> Loc
+    LLabel :: Label -> Loc
     deriving (Show)
 
-type Symbols = M.Map String Integer
+data Command where
+    COp   :: Operation -> Command
+    CJump :: Operation -> Loc -> Command
+    CCall :: Loc -> Integer -> Command
+    deriving (Show)
 
-data Statement where
-    StOperation :: Operation -> Statement
-    StJumpOp    :: (Integer -> Operation) -> JumpTarget -> Statement
-    StLabelled  :: String -> Statement -> Statement
-    StNone      :: Statement
-
-instance Show Statement where
-    show (StOperation op)  = show op
-    show (StJumpOp op t)   = show (op 0) ++ "(target: " ++ show t ++ ")"
-    show (StLabelled l st) = l ++ ": " ++ show st
-    show (StNone)          = "NOP"
+data Statement = Statement {
+      stLabel   :: Maybe Label
+    , stCommand :: Maybe Command
+    }
+    deriving (Show)
 
 stSize :: Statement -> Integer
-stSize (StLabelled _ st)  = stSize st
-stSize (StOperation op)   = opSize op
-stSize (StJumpOp op _)    = opSize (op 0)
-stSize (StNone)           = 0
+stSize (Statement _ Nothing)   = 0
+stSize (Statement _ (Just cmd)) = cmdSize cmd
+    where
+        cmdSize (COp op) = opSize op
+        cmdSize (CJump op _) = opSize op
+        cmdSize (CCall _ _) = opSize (OpCall 0 0)
 
 eol :: Parser String
 eol = try (string "\n\r")
@@ -46,67 +50,83 @@ eol = try (string "\n\r")
 spaces :: Parser ()
 spaces = skipMany (char ' ') >> return ()
 
+-- FIXME: add '-'
 integer :: Parser Integer
 integer = read <$> many1 digit
 
 identifier :: Parser String
 identifier = (:) <$> letter <*> many alphaNum
 
-jumpTarget :: Parser JumpTarget
-jumpTarget = try (JTAddr <$> integer)
-         <|> try (JTLabel <$> identifier)
-         <?> "jump target"
+loc :: Parser Loc
+loc =   try (LAddr <$> integer)
+    <|> try (LLabel <$> identifier)
+    <?> "location"
 
-parseOp0 :: String -> Operation -> Parser Statement
-parseOp0 opcode op = (StOperation op) <$ string opcode
+parseOp0 :: String -> Operation -> Parser Command
+parseOp0 opcode op = (COp op) <$ string opcode
 
-parseOp1 :: String -> (Integer -> Operation) -> Parser Statement
+parseOp1 :: String -> (Integer -> Operation) -> Parser Command
 parseOp1 opcode op = do
     string opcode
-    spaces
-    x <- integer
-    return $ StOperation (op x)
+    many1 space
+    arg <- integer
+    return $ COp (op arg)
 
-parseJump1 :: String -> (Integer -> Operation) -> Parser Statement
+parseJump1 :: String -> (Integer -> Operation) -> Parser Command
 parseJump1 opcode op = do
     string opcode
-    spaces
-    x <- jumpTarget
-    return (StJumpOp op x)        
+    many1 space
+    l <- loc
+    -- dummy jump addr in the op, will be resolved during codegen
+    return $ CJump (op 0) l
 
-op :: Parser Statement
-op =    try (parseOp0 "IADD"   OpIAdd  )
-    <|> try (parseOp0 "ISUB"   OpISub  )
-    <|> try (parseOp0 "IMUL"   OpIMul  )
-    <|> try (parseOp0 "LT"     OpLt    )
-    <|> try (parseOp0 "EQ"     OpEq    )
-    <|> try (parseJump1 "BRT"  OpBrt   )
-    <|> try (parseJump1 "BRF"  OpBrf   )
-    <|> try (parseJump1 "BR"   OpBr    )
-    <|> try (parseOp1 "ICONST" OpIConst)
-    <|> try (parseOp1 "GLOAD"  OpGLoad )
-    <|> try (parseOp1 "GSTORE" OpGStore)
-    <|> try (parseOp1 "ICONST" OpIConst)
-    <|> try (parseOp0 "PRINT"  OpPrint )
-    <|> try (parseOp0 "POP"    OpPop   )
-    <|> try (parseOp0 "HALT"   OpHalt  )    
+parseCall :: Parser Command
+parseCall = do
+    string "CALL"
+    many1 space
+    l <- loc
+    many1 space
+    nargs <- integer
+    return $ CCall l nargs
+
+command :: Parser Command
+command =
+        try (parseOp0   "IADD"   OpIAdd  )
+    <|> try (parseOp0   "ISUB"   OpISub  )
+    <|> try (parseOp0   "IMUL"   OpIMul  )
+    <|> try (parseOp0   "LT"     OpLt    )
+    <|> try (parseOp0   "EQ"     OpEq    )
+    <|> try (parseJump1 "BRT"    OpBrt   )
+    <|> try (parseJump1 "BRF"    OpBrf   )
+    <|> try (parseJump1 "BR"     OpBr    )
+    <|> try (parseOp1   "ICONST" OpIConst)
+    <|> try (parseOp1   "LOAD"   OpLoad  )
+    <|> try (parseOp1   "GLOAD"  OpGLoad )
+    <|> try (parseOp1   "STORE"  OpStore )
+    <|> try (parseOp1   "GSTORE" OpGStore)
+    <|> try (parseOp1   "ICONST" OpIConst)
+    <|> try (parseOp0   "PRINT"  OpPrint )
+    <|> try (parseOp0   "POP"    OpPop   )
+    <|> try (parseCall                   )
+    <|> try (parseOp0   "RET"    OpRet   )
+    <|> try (parseOp0   "HALT"   OpHalt  )
     <?> "opcode"
 
-labelled :: Parser Statement
-labelled = do
-    l <- identifier
-    char ':'
-    op <- operation
-    return $ StLabelled l op
+label :: Parser Label
+label = identifier <* char ':'
 
-operation :: Parser Statement
-operation = space *> spaces *> op
+commandPart :: Parser Command
+commandPart = do
+    space
+    spaces
+    cmd <- command
+    spaces
+    return cmd
 
 statement :: Parser Statement
-statement =
-        try labelled
-    <|> try operation
-    <|> (spaces >> return StNone)
+statement = Statement
+    <$> optionMaybe label
+    <*> optionMaybe commandPart
     <?> "statement"
 
 program :: Parser [Statement]
@@ -126,22 +146,31 @@ generate prog = let symbols = makeSymbols prog in
 makeSymbols :: [Statement] -> Symbols
 makeSymbols xs = go M.empty 0 xs
     where
-        go :: Symbols -> Integer -> [Statement] -> Symbols
         go symbols _ [] = symbols
-        go symbols n ((StLabelled s st):rest) =
+        go symbols n (st@(Statement (Just s) _):rest) =
             go (M.insert s n symbols) (n + stSize st) rest -- FIXME: duplicate labels
-        go symbols n (st:rest) = go symbols (n + stSize st) rest
+        go symbols n (st@(Statement Nothing _):rest) =
+            go symbols (n + stSize st) rest
+
+resolve :: Symbols -> Loc -> Address
+resolve _       (LAddr addr) = addr
+resolve symbols (LLabel v)   = case M.lookup v symbols of
+    Nothing   -> error $ "Not found: " ++ v     -- FIXME: addr not found
+    Just addr -> addr
 
 genStatement :: Symbols -> Statement -> [Integer]
-genStatement _       (StOperation op) = genOp op
-genStatement symbols (StJumpOp op target) = genOp (op $ resolve target)
+genStatement symbols (Statement _ (Just cmd)) = genCommand symbols cmd
+genStatement _       _                        = []
+
+genCommand :: Symbols -> Command -> [Integer]
+genCommand _       (COp op)       = genOp op
+genCommand symbols (CJump op loc) = genOp $ (unpack op) (resolve symbols loc)
+    -- FIXME: better way to get opcode?
     where
-        resolve (JTAddr addr) = addr
-        resolve (JTLabel v) = case M.lookup v symbols of
-            Nothing   -> error $ "Not found: " ++ v     -- FIXME: addr not found
-            Just addr -> addr
-genStatement symbols (StLabelled _ op) = genStatement symbols op
-genStatement _ _ = []
+        unpack (OpBr  _) = OpBr
+        unpack (OpBrt _) = OpBrt
+        unpack (OpBrf _) = OpBrf
+genCommand symbols (CCall loc n)  = genOp $ OpCall (resolve symbols loc) n
 
 genOp :: Operation -> [Integer]
 genOp (OpIAdd)     = [1]
@@ -153,8 +182,12 @@ genOp (OpBr  addr) = [6,  addr]
 genOp (OpBrt addr) = [7,  addr]
 genOp (OpBrf addr) = [8,  addr]
 genOp (OpIConst v) = [9,  v]
+genOp (OpLoad  v)  = [10, v]
 genOp (OpGLoad v)  = [11, v]
+genOp (OpStore v)  = [12, v]
 genOp (OpGStore v) = [13, v]
 genOp (OpPrint)    = [14]
 genOp (OpPop)      = [15]
+genOp (OpCall a n) = [16, a, n]
+genOp (OpRet)      = [17]
 genOp (OpHalt)     = [18]
