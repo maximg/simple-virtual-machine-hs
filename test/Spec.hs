@@ -98,13 +98,13 @@ main = hspec $ do
 
 
   describe "call" $ do
-    it "store current ip on stack and jump to an address" $
+    it "stores current ip and number of arguments on the stack and jumps to an address" $
       let prog = [ " CALL L1 0", " HALT", "L1: ICONST 55" ] in
-      vmStack (runProg prog) `shouldBe` [55, 3]
+      vmStack (runProg prog) `shouldBe` [55, 3, 0]
 
   describe "ret" $ do
-    it "takes a value from the stack and continues from that address" $
-      let prog = [ " ICONST 4", " RET", " HALT", " ICONST 55" ] in
+    it "cleans up stack frame and returns execution to the caller" $
+      let prog = [ " CALL L1 0", " HALT", "L1: ICONST 55", " RET" ] in
       vmStack (runProg prog) `shouldBe` [55]
 
 

@@ -176,14 +176,19 @@ exec (OpPrint)      = do
     v <- pop
     modify $ print (show v)
 exec (OpCall addr nargs) = do
+    push nargs
     gets vmIp >>= push
     modify $ changeIp (\_ -> addr)
 exec (OpPop)        = do
     pop
     return ()
 exec (OpRet)        = do
+    rval <- pop
     ip <- pop
+    nargs <- pop
+    modify (\vm -> vm { vmStack = drop (fromInteger nargs) (vmStack vm) })
     modify $ changeIp (\_ -> ip)
+    push rval
 exec (OpHalt)       = modify halt
 -- exec op = error $ "Unsupported op " ++ show op
 
