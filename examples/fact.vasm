@@ -1,0 +1,18 @@
+        ICONST  5
+        CALL    FACT 1
+        PRINT
+        HALT
+FACT:   LOAD    -1
+        ICONST  1
+        EQ
+        BRF     FACT1
+        ICONST  1
+        RET
+FACT1:
+        LOAD    -1
+        ICONST  1
+        ISUB
+        CALL    FACT 1
+        LOAD    -1
+        IMUL
+        RET
