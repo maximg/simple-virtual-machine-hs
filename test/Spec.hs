@@ -112,6 +112,22 @@ main = hspec $ do
         let prog = [ " ICONST 33", " CALL F 1", " HALT", "F: LOAD -1" ] in
         vmStack (runProg prog) `shouldBe` [33, 5, 1, 1, 33]
 
+    describe "given non-negative value" $ do
+      it "takes an local from current frame and puts it on the stack" $
+        let prog = [ " CALL F 0", " HALT", "F: ICONST 55", " LOAD 0" ] in
+        vmStack (runProg prog) `shouldBe` [55, 55, 3, 0, 0]
+
+  describe "store" $ do
+    describe "given negative value" $ do
+      it "takes a value from the stack and stores it in an argument in current frame" $
+        let prog = [ " ICONST 33", " CALL F 1", " HALT", "F: ICONST 44", " STORE -1" ] in
+        vmStack (runProg prog) `shouldBe` [5, 1, 1, 44]
+
+    describe "given non-negative value" $ do
+      it "takes a value from the stack and stores it in a local in current frame" $
+        let prog = [ " CALL F 0", " HALT", "F: ICONST 44", " ICONST 55", " STORE 0" ] in
+        vmStack (runProg prog) `shouldBe` [55, 3, 0, 0]
+
 
 
 runProg prog = case compile $ unlines (prog ++ [" HALT"]) of

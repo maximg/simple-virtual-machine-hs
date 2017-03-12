@@ -13,6 +13,7 @@ import Prelude hiding (print)
 import qualified Data.Map as M
 import Control.Monad.State
 import Data.Maybe
+import Control.Lens
 
 type Program = [Integer]    -- FIXME: replace with ByteString
 
@@ -97,6 +98,9 @@ halt vm = vm { vmStopped = True }
 peek :: Integer -> VmState -> Integer
 peek offset vm = (vmStack vm) !! (fromInteger offset)
 
+poke :: Integer -> Integer -> VmState -> VmState
+poke v offset vm = vm { vmStack = (element (fromInteger offset) .~ v) (vmStack vm) }
+
 print :: String -> VmState -> VmState
 print s vm = vm { vmOutput = (vmOutput vm) ++ [s] }
 
@@ -155,6 +159,10 @@ store :: Integer -> Integer -> VmSt ()
 store v addr = do
     modify (\vm -> vm { vmGlobals = M.insert addr v $ vmGlobals vm})
 
+fpOffset :: Integer -> Integer
+fpOffset x | x >= 0 = x + 3
+           | otherwise = x
+
 execBinOp :: (Integer -> Integer -> Integer) -> VmSt ()
 execBinOp f =  do
     v2 <- pop
@@ -171,14 +179,17 @@ exec (OpBr  addr)    = modify $ changeIp (\_ -> addr)
 exec (OpBrt addr)    = pop >>= \v -> when (v == 1) $ modify $ changeIp (\_ -> addr)
 exec (OpBrf addr)    = pop >>= \v -> when (v == 0) $ modify $ changeIp (\_ -> addr)
 exec (OpIConst v)    = push v
-exec (OpLoad idx)    | idx < 0 = do
-                                    fp <- gets vmFp
-                                    v <- gets $ peek (fp - idx - 1)
-                                    push v
+exec (OpLoad idx)    = do
+    fp <- gets vmFp
+    v <- gets $ peek (fp - fpOffset idx - 1)
+    push v
 exec (OpGLoad addr)  = do
     mem <- gets vmGlobals
     push $ fromJust $ M.lookup addr mem -- FIXME: failed lookup error
-exec (OpStore idx)   = undefined
+exec (OpStore idx)   = do
+    v <- pop
+    fp <- gets vmFp
+    modify $ poke v (fp - fpOffset idx - 1)
 exec (OpGStore addr) = do
     v <- pop
     store v addr
