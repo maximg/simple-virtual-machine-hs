@@ -15,7 +15,10 @@ import Control.Monad.State
 import Data.Maybe
 import Control.Lens
 
-type Program = [Integer]    -- FIXME: replace with ByteString
+-- when true do more runtime checks
+debug = False
+
+type Program = [Integer]
 
 data VmState = VmState { vmIp :: Integer
                        , vmFp :: Integer
@@ -110,10 +113,12 @@ printTrace s vm = vm { vmTrace = (vmTrace vm) ++ [s] }
 
 fetchOne :: VmSt Integer
 fetchOne = do
-    vm <- get
-    let value = vmCode vm !! (fromInteger $ vmIp vm)   -- FIXME: out of bounds error
+    ip <- gets (fromInteger . vmIp)
+    code <- gets vmCode
     modify $ changeIp (+ 1)
-    return value     
+    -- We do not normally check if ip is still inside the program
+    when (debug && ip >= length code) (error "IP out of bounds")
+    return $ code !! ip
 
 decode :: Integer -> VmSt Operation
 decode opcode = do
@@ -149,10 +154,11 @@ push v = modify (\vm -> vm { vmStack = v : (vmStack vm)
 
 pop :: VmSt Integer
 pop = do
+    -- No special handling or diagnostics for underflow
     v <- gets $ head . vmStack
     modify (\vm -> vm { vmStack = tail (vmStack vm)
                       , vmFp = (vmFp vm) - 1
-                      }) -- FIXME: underflow error
+                      })
     return v
 
 store :: Integer -> Integer -> VmSt ()
@@ -185,7 +191,9 @@ exec (OpLoad idx)    = do
     push v
 exec (OpGLoad addr)  = do
     mem <- gets vmGlobals
-    push $ fromJust $ M.lookup addr mem -- FIXME: failed lookup error
+    push $ case M.lookup addr mem of
+            Nothing -> error $ "Read from uninitialized global address " ++ show addr
+            Just v  -> v
 exec (OpStore idx)   = do
     v <- pop
     fp <- gets vmFp
