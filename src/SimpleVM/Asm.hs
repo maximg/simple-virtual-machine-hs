@@ -1,7 +1,8 @@
 {-# LANGUAGE GADTs        #-}
 
 module SimpleVM.Asm
-    ( compile
+    ( AsmError(..)
+    , compile
     , generate
     , makeSymbols
     ) where
@@ -39,6 +40,14 @@ stSize (Statement _ (Just cmd)) = cmdSize cmd
         cmdSize (COp op) = opSize op
         cmdSize (CJump op _) = opSize op
         cmdSize (CCall _ _) = opSize (OpCall 0 0)
+
+data AsmError where
+    DuplicateSymbol :: Label -> Address -> Address -> AsmError
+    deriving (Eq)
+
+instance Show AsmError where
+    show (DuplicateSymbol l a1 a2) =
+        "address " ++ show a2 ++ ": label " ++ show l ++ " already defined at " ++ show a1
 
 eol :: Parser String
 eol = try (string "\n\r")
@@ -144,16 +153,19 @@ program = do
 compile :: String -> Either ParseError [Statement]
 compile input = parse program "" input
 
-generate :: [Statement] -> [Integer]
-generate prog = let symbols = makeSymbols prog in
-    concatMap (genStatement symbols) prog
+generate :: [Statement] -> Either AsmError [Integer]
+generate prog = do
+    symbols <- makeSymbols prog
+    return $ concatMap (genStatement symbols) prog
 
-makeSymbols :: [Statement] -> Symbols
+makeSymbols :: [Statement] -> Either AsmError Symbols
 makeSymbols xs = go M.empty 0 xs
     where
-        go symbols _ [] = symbols
+        go symbols _ [] = Right symbols
         go symbols n (st@(Statement (Just s) _):rest) =
-            go (M.insert s n symbols) (n + stSize st) rest -- FIXME: duplicate labels
+            case M.lookup s symbols of
+                Just n1 -> Left $ DuplicateSymbol s n n1
+                Nothing -> go (M.insert s n symbols) (n + stSize st) rest
         go symbols n (st@(Statement Nothing _):rest) =
             go symbols (n + stSize st) rest
 

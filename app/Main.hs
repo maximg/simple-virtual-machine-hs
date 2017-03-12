@@ -15,7 +15,9 @@ run :: String -> IO ()
 run contents = do
     case compile contents of
         Left err -> print err
-        Right prog -> printVm $ runSimpleVm $ generate prog
+        Right prog -> case generate prog of
+            Left err -> print err
+            Right bcode -> printVm $ runSimpleVm bcode
 
 runWithFilename :: String -> IO ()
 runWithFilename fileName = do

@@ -128,8 +128,17 @@ main = hspec $ do
         let prog = [ " CALL F 0", " HALT", "F: ICONST 44", " ICONST 55", " STORE 0" ] in
         vmStack (runProg prog) `shouldBe` [55, 3, 0, 0]
 
+  describe "assembler" $ do
+    describe "when given duplicate labels" $ do
+      it "produces an error message" $
+        let prog = [ "L1: RET", "L1: RET" ] in
+        assemble prog `shouldBe` Left (DuplicateSymbol "L1" 1 0)
 
 
-runProg prog = case compile $ unlines (prog ++ [" HALT"]) of
+assemble prog = case compile $ unlines prog of
+                  Left err -> error $ show err
+                  Right obj -> generate obj
+
+runProg prog = case assemble (prog ++ [" HALT"]) of
                 Left err -> error $ show err
-                Right prog -> runSimpleVm $ generate prog
+                Right prog -> runSimpleVm prog
