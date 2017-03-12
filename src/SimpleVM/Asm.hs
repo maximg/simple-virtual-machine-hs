@@ -7,12 +7,11 @@ module SimpleVM.Asm
     , makeSymbols
     ) where
 
-import SimpleVM.VM
-import Data.Maybe
+import           SimpleVM.VM
+import           Data.Maybe
 import qualified Data.Map as M
-import Text.ParserCombinators.Parsec hiding (spaces, label)
+import           Text.ParserCombinators.Parsec hiding (spaces, label)
 
-type Address = Integer
 type Label = String
 type Symbols = M.Map Label Address
 
@@ -106,6 +105,8 @@ parseCall = do
     nargs <- integer
     return $ CCall l nargs
 
+-- FIXME: replace with a more declarative opcode parsing,
+-- like OpCode0 / OpCode1 / OpCode2 data and a dynamically built parser
 command :: Parser Command
 command =
         try (parseOp0   "IADD"   OpIAdd  )
@@ -157,10 +158,6 @@ program = do
 compile :: String -> Either ParseError [Statement]
 compile input = parse program "" input
 
-generate :: [Statement] -> Either AsmError [Integer]
-generate prog = do
-    symbols <- makeSymbols prog
-    return $ concatMap (genStatement symbols) prog
 
 makeSymbols :: [Statement] -> Either AsmError Symbols
 makeSymbols xs = go M.empty 0 xs
@@ -179,36 +176,21 @@ resolve symbols (LLabel v)   = case M.lookup v symbols of
     Nothing   -> error $ "Not found: " ++ v     -- FIXME: addr not found
     Just addr -> addr
 
-genStatement :: Symbols -> Statement -> [Integer]
-genStatement symbols (Statement _ (Just cmd)) = genCommand symbols cmd
-genStatement _       _                        = []
-
 genCommand :: Symbols -> Command -> [Integer]
-genCommand _       (COp op)       = genOp op
-genCommand symbols (CJump op loc) = genOp $ (unpack op) (resolve symbols loc)
+genCommand _       (COp op)       = encode op
+genCommand symbols (CJump op loc) = encode $ (unpack op) (resolve symbols loc)
     -- FIXME: better way to get opcode?
     where
         unpack (OpBr  _) = OpBr
         unpack (OpBrt _) = OpBrt
         unpack (OpBrf _) = OpBrf
-genCommand symbols (CCall loc n)  = genOp $ OpCall (resolve symbols loc) n
+genCommand symbols (CCall loc n)  = encode $ OpCall (resolve symbols loc) n
 
-genOp :: Operation -> [Integer]
-genOp (OpIAdd)     = [1]
-genOp (OpISub)     = [2]
-genOp (OpIMul)     = [3]
-genOp (OpLt)       = [4]
-genOp (OpEq)       = [5]
-genOp (OpBr  addr) = [6,  addr]
-genOp (OpBrt addr) = [7,  addr]
-genOp (OpBrf addr) = [8,  addr]
-genOp (OpIConst v) = [9,  v]
-genOp (OpLoad  v)  = [10, v]
-genOp (OpGLoad v)  = [11, v]
-genOp (OpStore v)  = [12, v]
-genOp (OpGStore v) = [13, v]
-genOp (OpPrint)    = [14]
-genOp (OpPop)      = [15]
-genOp (OpCall a n) = [16, a, n]
-genOp (OpRet)      = [17]
-genOp (OpHalt)     = [18]
+genStatement :: Symbols -> Statement -> [Integer]
+genStatement symbols (Statement _ (Just cmd)) = genCommand symbols cmd
+genStatement _       _                        = []
+
+generate :: [Statement] -> Either AsmError [Integer]
+generate prog = do
+    symbols <- makeSymbols prog
+    return $ concatMap (genStatement symbols) prog

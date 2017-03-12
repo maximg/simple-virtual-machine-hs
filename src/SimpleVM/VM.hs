@@ -2,18 +2,21 @@
 
 module SimpleVM.VM
     ( Program
+    , Address
     , Operation(..)
     , VmState(..)
-    , VmError
     , runSimpleVm
     , opSize
+    , encode
     ) where
 
-import Prelude hiding (print)
+import           Prelude hiding (print)
 import qualified Data.Map as M
-import Control.Monad.State
-import Data.Maybe
-import Control.Lens
+import           Control.Monad.State
+import           Data.Maybe
+import           Control.Lens
+
+-- FIXME: record updates can be probably more elegant
 
 -- when true do more runtime checks
 debug = False
@@ -34,31 +37,29 @@ data VmState = VmState { vmIp :: Integer
 makeSimpleVm :: Program -> VmState
 makeSimpleVm code = VmState 0 0 code [] M.empty False [] []
 
-data VmError where
-    MemoryViolation :: VmError
-    deriving Show
-
 type VmSt a = State VmState a
 
+type Address = Integer
+
 data Operation where
-    OpIAdd   :: Operation -- 1
-    OpISub   :: Operation -- 2
-    OpIMul   :: Operation -- 3
-    OpLt     :: Operation -- 4
-    OpEq     :: Operation -- 5
-    OpBr     :: Integer -> Operation -- 6
-    OpBrt    :: Integer -> Operation -- 7
-    OpBrf    :: Integer -> Operation -- 8
-    OpIConst :: Integer -> Operation -- 9
-    OpLoad   :: Integer -> Operation -- 10
-    OpGLoad  :: Integer -> Operation -- 11
-    OpStore  :: Integer -> Operation -- 12
-    OpGStore :: Integer -> Operation -- 13
-    OpPrint  :: Operation -- 14
-    OpPop    :: Operation -- 15
-    OpCall   :: Integer -> Integer -> Operation -- 16 ; addr nargs
-    OpRet    :: Operation -- 17
-    OpHalt   :: Operation -- 18
+    OpIAdd   :: Operation                        -- 1
+    OpISub   :: Operation                        -- 2
+    OpIMul   :: Operation                        -- 3
+    OpLt     :: Operation                        -- 4
+    OpEq     :: Operation                        -- 5
+    OpBr     :: Address -> Operation             -- 6
+    OpBrt    :: Address -> Operation             -- 7
+    OpBrf    :: Address -> Operation             -- 8
+    OpIConst :: Integer -> Operation             -- 9
+    OpLoad   :: Integer -> Operation             -- 10
+    OpGLoad  :: Address -> Operation             -- 11
+    OpStore  :: Integer -> Operation             -- 12
+    OpGStore :: Address -> Operation             -- 13
+    OpPrint  :: Operation                        -- 14
+    OpPop    :: Operation                        -- 15
+    OpCall   :: Address -> Integer -> Operation  -- 16
+    OpRet    :: Operation                        -- 17
+    OpHalt   :: Operation                        -- 18
 
 instance Show Operation where
     show (OpIAdd)       = "IADD"
@@ -79,6 +80,26 @@ instance Show Operation where
     show (OpCall a1 a2) = "CALL   " ++ show a1 ++ show a2
     show (OpRet)        = "RET"
     show (OpHalt)       = "HALT"
+
+encode :: Operation -> [Integer]
+encode (OpIAdd)     = [1]
+encode (OpISub)     = [2]
+encode (OpIMul)     = [3]
+encode (OpLt)       = [4]
+encode (OpEq)       = [5]
+encode (OpBr  addr) = [6,  addr]
+encode (OpBrt addr) = [7,  addr]
+encode (OpBrf addr) = [8,  addr]
+encode (OpIConst v) = [9,  v]
+encode (OpLoad  v)  = [10, v]
+encode (OpGLoad v)  = [11, v]
+encode (OpStore v)  = [12, v]
+encode (OpGStore v) = [13, v]
+encode (OpPrint)    = [14]
+encode (OpPop)      = [15]
+encode (OpCall a n) = [16, a, n]
+encode (OpRet)      = [17]
+encode (OpHalt)     = [18]
 
 opSize :: Operation -> Integer
 opSize (OpBr     _) = 2
@@ -205,11 +226,11 @@ exec (OpPrint)      = do
     v <- pop
     modify $ print (show v)
 {- Frame structure:
-    locals
+    locals (0 .. +999)
     return addr
     old fp
     nargs
-    args <- fp
+    args (-1 .. -9999)  <- fp
 -}
 exec (OpCall addr nargs) = do
     fp <- gets vmFp
