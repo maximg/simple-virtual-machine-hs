@@ -74,7 +74,6 @@ main = hspec $ do
       let prog = [ " ICONST 1", " GSTORE 2", " ICONST 3", " GLOAD 2" ] in
       vmStack (runProg prog) `shouldBe` [1, 3]
 
-
   describe "br" $ do
     it "unconditionally jumps to an address" $
       let prog = [ " BR 3", " HALT", " ICONST 55" ] in
@@ -99,13 +98,19 @@ main = hspec $ do
 
   describe "call" $ do
     it "stores current ip and number of arguments on the stack and jumps to an address" $
-      let prog = [ " CALL L1 0", " HALT", "L1: ICONST 55" ] in
-      vmStack (runProg prog) `shouldBe` [55, 3, 0]
+      let prog = [ " ICONST 44", " CALL L1 1", " HALT", "L1: ICONST 55" ] in
+      vmStack (runProg prog) `shouldBe` [55, 5, 1, 1, 44]
 
   describe "ret" $ do
     it "cleans up stack frame and returns execution to the caller" $
-      let prog = [ " CALL L1 0", " HALT", "L1: ICONST 55", " RET" ] in
+      let prog = [ " ICONST 44", " CALL L1 1", " HALT", "L1: ICONST 55", " RET" ] in
       vmStack (runProg prog) `shouldBe` [55]
+
+  describe "load" $ do
+    describe "given negative value" $ do
+      it "takes an argument from current frame and puts it on the stack" $
+        let prog = [ " ICONST 33", " CALL F 1", " HALT", "F: LOAD -1" ] in
+        vmStack (runProg prog) `shouldBe` [33, 5, 1, 1, 33]
 
 
 

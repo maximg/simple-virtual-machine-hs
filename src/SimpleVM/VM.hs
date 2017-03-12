@@ -17,6 +17,7 @@ import Data.Maybe
 type Program = [Integer]    -- FIXME: replace with ByteString
 
 data VmState = VmState { vmIp :: Integer
+                       , vmFp :: Integer
                        , vmCode :: Program    
                        , vmStack :: [Integer]
                        , vmGlobals :: M.Map Integer Integer
@@ -27,7 +28,7 @@ data VmState = VmState { vmIp :: Integer
                        deriving (Show)
 
 makeSimpleVm :: Program -> VmState
-makeSimpleVm code = VmState 0 code [] M.empty False [] []
+makeSimpleVm code = VmState 0 0 code [] M.empty False [] []
 
 data VmError where
     MemoryViolation :: VmError
@@ -93,6 +94,9 @@ changeIp f vm = vm { vmIp = f (vmIp vm) }
 halt :: VmState -> VmState
 halt vm = vm { vmStopped = True }
 
+peek :: Integer -> VmState -> Integer
+peek offset vm = (vmStack vm) !! (fromInteger offset)
+
 print :: String -> VmState -> VmState
 print s vm = vm { vmOutput = (vmOutput vm) ++ [s] }
 
@@ -135,13 +139,16 @@ trace :: Operation -> VmSt ()
 trace op = modify $ printTrace $ show op
 
 push :: Integer -> VmSt ()
-push v = modify $ push' v
-    where push' v vm  = vm { vmStack = v : (vmStack vm) }
+push v = modify (\vm -> vm { vmStack = v : (vmStack vm)
+                           , vmFp = (vmFp vm) + 1
+                           })
 
 pop :: VmSt Integer
 pop = do
     v <- gets $ head . vmStack
-    modify (\vm -> vm { vmStack = tail (vmStack vm) }) -- FIXME: underflow error
+    modify (\vm -> vm { vmStack = tail (vmStack vm)
+                      , vmFp = (vmFp vm) - 1
+                      }) -- FIXME: underflow error
     return v
 
 store :: Integer -> Integer -> VmSt ()
@@ -164,7 +171,10 @@ exec (OpBr  addr)    = modify $ changeIp (\_ -> addr)
 exec (OpBrt addr)    = pop >>= \v -> when (v == 1) $ modify $ changeIp (\_ -> addr)
 exec (OpBrf addr)    = pop >>= \v -> when (v == 0) $ modify $ changeIp (\_ -> addr)
 exec (OpIConst v)    = push v
-exec (OpLoad idx)    = undefined
+exec (OpLoad idx)    | idx < 0 = do
+                                    fp <- gets vmFp
+                                    v <- gets $ peek (fp - idx - 1)
+                                    push v
 exec (OpGLoad addr)  = do
     mem <- gets vmGlobals
     push $ fromJust $ M.lookup addr mem -- FIXME: failed lookup error
@@ -175,8 +185,18 @@ exec (OpGStore addr) = do
 exec (OpPrint)      = do
     v <- pop
     modify $ print (show v)
+{- Frame structure:
+    locals
+    return addr
+    old fp
+    nargs
+    args <- fp
+-}
 exec (OpCall addr nargs) = do
+    fp <- gets vmFp
+    modify (\vm -> vm { vmFp = 0 })
     push nargs
+    push fp
     gets vmIp >>= push
     modify $ changeIp (\_ -> addr)
 exec (OpPop)        = do
@@ -185,9 +205,12 @@ exec (OpPop)        = do
 exec (OpRet)        = do
     rval <- pop
     ip <- pop
+    fp <- pop
     nargs <- pop
-    modify (\vm -> vm { vmStack = drop (fromInteger nargs) (vmStack vm) })
-    modify $ changeIp (\_ -> ip)
+    modify (\vm -> vm { vmStack = drop (fromInteger nargs) (vmStack vm)
+                      , vmFp = fp - nargs
+                      , vmIp = ip
+                      })
     push rval
 exec (OpHalt)       = modify halt
 -- exec op = error $ "Unsupported op " ++ show op
