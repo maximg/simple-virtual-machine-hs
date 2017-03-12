@@ -50,9 +50,14 @@ eol = try (string "\n\r")
 spaces :: Parser ()
 spaces = skipMany (char ' ') >> return ()
 
--- FIXME: add '-'
+unsigned :: Parser String
+unsigned = many1 digit
+
+signed :: Parser String
+signed = (:) <$> char '-' <*> unsigned
+
 integer :: Parser Integer
-integer = read <$> many1 digit
+integer = read <$> (try signed <|> try unsigned)
 
 identifier :: Parser String
 identifier = (:) <$> letter <*> many alphaNum

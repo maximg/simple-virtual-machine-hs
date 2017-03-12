@@ -13,8 +13,8 @@ main = hspec $ do
 
   describe "iconst" $ do
     it "pushes a value on top of the stack" $
-      let prog = [" ICONST 1", " ICONST 2"] in
-      vmStack (runProg prog) `shouldBe` [2,1]
+      let prog = [" ICONST 1", " ICONST -2"] in
+      vmStack (runProg prog) `shouldBe` [-2,1]
 
   describe "pop" $ do
     it "removes the value from the top of the stack" $
