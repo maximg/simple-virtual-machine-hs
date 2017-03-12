@@ -1,6 +1,0 @@
-        ICONST 5
-        GSTORE 1
-        ICONST 6
-        GLOAD  1
-        PRINT
-        HALT
