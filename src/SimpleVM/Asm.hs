@@ -71,6 +71,9 @@ integer = read <$> (try signed <|> try unsigned)
 identifier :: Parser String
 identifier = (:) <$> letter <*> many alphaNum
 
+comment :: Parser ()
+comment = char ';' *> many (noneOf "\n\r") >> return ()
+
 loc :: Parser Loc
 loc =   try (LAddr <$> integer)
     <|> try (LLabel <$> identifier)
@@ -134,13 +137,14 @@ commandPart = do
     space
     spaces
     cmd <- command
-    spaces
     return cmd
 
 statement :: Parser Statement
 statement = Statement
     <$> optionMaybe label
-    <*> optionMaybe commandPart
+    <*> optionMaybe (try commandPart)
+    <*  spaces
+    <*  optional comment
     <?> "statement"
 
 program :: Parser [Statement]

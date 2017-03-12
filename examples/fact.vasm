@@ -1,18 +1,21 @@
-        ICONST  5
-        CALL    FACT 1
+; calculate a factorial
+;
+        ICONST  5           ; input value
+        CALL    FACT 1      ; result will be on the stack
         PRINT
         HALT
-FACT:   LOAD    -1
+FACT:   
+        LOAD    -1          ; load the argument
         ICONST  1
         EQ
-        BRF     FACT1
+        BRF     FACT1       ; if not 1, do the calculation
         ICONST  1
         RET
 FACT1:
-        LOAD    -1
+        LOAD    -1          ; load the argument
         ICONST  1
-        ISUB
-        CALL    FACT 1
+        ISUB                ; calculate n-1
+        CALL    FACT 1      ; call the factorial again
         LOAD    -1
-        IMUL
+        IMUL                ; multiply the result by the argument
         RET

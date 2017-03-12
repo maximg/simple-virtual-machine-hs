@@ -155,6 +155,18 @@ main = hspec $ do
         (evaluate . force) (vmGlobals (runProg prog)) `shouldThrow` errorCall "Read from uninitialized global address 0"
 
 
+  describe "parser" $ do
+    describe "when reading an empty line" $
+      it "ignores it" $
+      let prog = [ " ICONST 0", " ", "", "PRINT" ] in
+      vmStack (runProg prog) `shouldBe` []
+
+    describe "when reading a comment" $
+      it "ignores it" $
+      let prog = [ ";comm", "  ;comm", " BR L ;comm", "L: BR M ;comm", "M: ;comm" ] in
+      vmStack (runProg prog) `shouldBe` []
+
+
 -- required for `force` to work
 instance NFData VmState where rnf x = seq x ()
 
